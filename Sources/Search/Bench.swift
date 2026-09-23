@@ -93,7 +93,7 @@ final class Bench {
             unlink(path)
             return
         }
-        fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK)
+        _ = fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK)
 
         let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: .main)
         source.setEventHandler { [weak self] in self?.accept() }
@@ -157,7 +157,7 @@ final class Bench {
             self.fd = fd
             self.handle = handle
             self.gone = gone
-            fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK)
+            _ = fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK)
             source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: .main)
             source.setEventHandler { [weak self] in self?.read() }
             source.resume()
@@ -1029,11 +1029,15 @@ final class Bench {
             answer(["ok": true])
 
         case "extensions", "ext-add", "ext-folder", "ext-press", "ext-remove", "ext-reload", "ext-page", "ext-popup", "ext-menu", "ext-pin", "ext-shot", "ext-answer", "ext-enable":
+            #if compiler(>=6.1)
             guard #available(macOS 15.4, *) else {
                 answer(["error": "extensions need macOS 15.4"])
                 return
             }
             extensionCommand(verb, request, browser: browser, answer)
+            #else
+            answer(["error": "extensions need macOS 15.4 and Xcode 16.3 or later"])
+            #endif
 
         default:
             answer(["error": "unknown command “\(verb)”", "commands": [
@@ -1042,6 +1046,7 @@ final class Bench {
         }
     }
 
+    #if compiler(>=6.1)
     /// Extensions, from the shell. Installing asks as it always does, except
     /// in a test run given `yes` — a real browser can't be made to skip it.
     @available(macOS 15.4, *)
@@ -1146,6 +1151,7 @@ final class Bench {
             answer(["error": "unknown"])
         }
     }
+    #endif
 
     private func find(_ request: [String: Any], in browser: Browser) -> Tab? {
         guard let ref = (request["id"] as? String)?.lowercased(), !ref.isEmpty else { return nil }

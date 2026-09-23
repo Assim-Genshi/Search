@@ -76,8 +76,8 @@ enum Look: String, CaseIterable, Identifiable {
     func apply() {
         let wanted = appearance
         DispatchQueue.main.async {
-            guard NSApp.appearance !== wanted, NSApp.appearance?.name != wanted?.name else { return }
-            NSApp.appearance = wanted
+            guard NSApplication.shared.appearance !== wanted, NSApplication.shared.appearance?.name != wanted?.name else { return }
+            NSApplication.shared.appearance = wanted
         }
     }
 }

@@ -4,6 +4,7 @@ build/
 .swiftpm/
 *.xcuserstate
 .DS_Store
+.vscode/
 
 # Signing material that's tied to one Apple Developer account and should
 # never be committed, even though the scripts happily run without it.

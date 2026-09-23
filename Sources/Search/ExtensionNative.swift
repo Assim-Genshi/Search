@@ -1,3 +1,4 @@
+#if compiler(>=6.1)
 import Foundation
 import WebKit
 
@@ -198,3 +199,4 @@ final class HostPipe: @unchecked Sendable {
         onExit = nil
     }
 }
+#endif

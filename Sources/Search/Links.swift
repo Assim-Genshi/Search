@@ -137,12 +137,20 @@ final class Links: NSObject, NSApplicationDelegate {
     /// after that, so the frame is on the screen before the work starts.
     /// Gives up waiting after a second or so and runs anyway.
     @MainActor
-    private static func onceShown(_ then: @escaping () -> Void, tries: Int = 0) {
+    private static func onceShown(_ then: @escaping @Sendable @MainActor () -> Void, tries: Int = 0) {
         let shown = NSApp.windows.contains { $0.isVisible && $0.contentView != nil }
         if shown || tries > 40 {
-            DispatchQueue.main.async(execute: then)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    then()
+                }
+            }
         } else {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) { onceShown(then, tries: tries + 1) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) {
+                MainActor.assumeIsolated {
+                    onceShown(then, tries: tries + 1)
+                }
+            }
         }
     }
 

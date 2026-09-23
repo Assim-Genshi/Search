@@ -46,12 +46,25 @@ BUILD="$(date +%Y%m%d%H%M)"
 # older Mac is not handed a build it can't open.
 MINIMUM="14.0"
 
-swift build -c "$CONFIG"
-BINARY=".build/$CONFIG/Search"
+# Build universal binary (Apple Silicon + Intel) by default so the app runs on both.
+# ARCHS can be overridden (e.g. ARCHS="$(uname -m)") for faster single-arch builds.
+# We build each architecture separately and merge with lipo to avoid an Xcode/PIF
+# bug with multi-arch duplicate output files.
+ARCH_BINARIES=()
+for arch in ${ARCHS:-arm64 x86_64}; do
+  echo "building ($arch)..."
+  swift build -c "$CONFIG" --triple "${arch}-apple-macosx"
+  BIN_DIR="$(swift build -c "$CONFIG" --triple "${arch}-apple-macosx" --show-bin-path)"
+  ARCH_BINARIES+=("$BIN_DIR/$NAME")
+done
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BINARY" "$APP/Contents/MacOS/$NAME"
+if [ "${#ARCH_BINARIES[@]}" -eq 1 ]; then
+  cp "${ARCH_BINARIES[0]}" "$APP/Contents/MacOS/$NAME"
+else
+  lipo -create -output "$APP/Contents/MacOS/$NAME" "${ARCH_BINARIES[@]}"
+fi
 
 # Symbols stay out of the app. The linker leaves every function's name and a
 # map back to the source in the binary — 15,000 entries, more than half of
@@ -61,7 +74,7 @@ cp "$BINARY" "$APP/Contents/MacOS/$NAME"
 # atos -o build/Search.app.dSYM/Contents/Resources/DWARF/Search).
 if [ "$CONFIG" = "release" ]; then
   rm -rf "$APP.dSYM"
-  dsymutil "$BINARY" -o "$APP.dSYM" 2>/dev/null || echo "no dSYM this time" >&2
+  dsymutil "$APP/Contents/MacOS/$NAME" -o "$APP.dSYM" 2>/dev/null || echo "no dSYM this time" >&2
   strip -x "$APP/Contents/MacOS/$NAME"
 fi
 

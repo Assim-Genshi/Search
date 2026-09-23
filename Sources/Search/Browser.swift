@@ -1,5 +1,5 @@
 import SwiftUI
-import WebKit
+@preconcurrency import WebKit
 import Combine
 
 // Everything the window knows: which tabs exist, which one is showing, and
@@ -1231,7 +1231,7 @@ final class Browser: NSObject, ObservableObject {
         guard #available(macOS 15.4, *) else { return nil }
         let url = Extensions.current(url)
         guard url.scheme == Extensions.scheme else { return nil }
-        return Extensions.shared.controller.extensionContext(for: url)?.webViewConfiguration
+        return Extensions.shared.configuration(for: url)
     }
 
     /// A page for the bench: at the end of the row, behind whatever you are

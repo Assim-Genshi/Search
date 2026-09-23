@@ -1,5 +1,5 @@
 import AppKit
-import WebKit
+@preconcurrency import WebKit
 
 // The questions a page is allowed to ask, and the answers it gets.
 //
