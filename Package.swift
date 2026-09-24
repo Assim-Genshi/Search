@@ -4,6 +4,9 @@ import PackageDescription
 let package = Package(
     name: "Search",
     platforms: [.macOS(.v14)],
+    products: [
+        .executable(name: "Search", targets: ["Search"])
+    ],
     targets: [
         .executableTarget(
             name: "Search",

@@ -272,8 +272,8 @@ final class History: ObservableObject {
 
     // MARK: - the file
 
-    private static var folder: URL { Store.folder }
-    private static var file: URL { Store.file("history.json") }
+    private nonisolated static var folder: URL { Store.folder }
+    private nonisolated static var file: URL { Store.file("history.json") }
 
     private func load() {
         guard let data = try? Data(contentsOf: History.file) else { return }
@@ -299,12 +299,14 @@ final class History: ObservableObject {
                 .sorted { self.frecency($0, now: now) > self.frecency($1, now: now) }
                 .prefix(2_000)
                 .map { $0 }
+            let folder = History.folder
+            let file = History.file
             DispatchQueue.global(qos: .utility).async {
                 guard let data = try? JSONEncoder().encode(list) else { return }
                 try? FileManager.default.createDirectory(
-                    at: History.folder, withIntermediateDirectories: true
+                    at: folder, withIntermediateDirectories: true
                 )
-                try? data.write(to: History.file, options: .atomic)
+                try? data.write(to: file, options: .atomic)
             }
         }
     }

@@ -1,3 +1,4 @@
+#if compiler(>=6.1)
 import SwiftUI
 import WebKit
 
@@ -232,3 +233,30 @@ struct StoreOffer: View {
             || (host == "chrome.google.com" && url.path.hasPrefix("/webstore"))
     }
 }
+#else
+import SwiftUI
+
+struct ExtensionsPage: View {
+    @ObservedObject var browser: Browser
+
+    var body: some View {
+        Card {
+            Line("Chrome extensions", "Need macOS 15.4 and Xcode 16.3 or later — the version whose WebKit can run them.") { EmptyView() }
+        }
+    }
+}
+
+struct StoreOffer: View {
+    @ObservedObject var browser: Browser
+
+    var body: some View {
+        EmptyView()
+    }
+
+    static func isStorePage(_ url: URL) -> Bool {
+        let host = url.host()?.lowercased() ?? ""
+        return host == "chromewebstore.google.com"
+            || (host == "chrome.google.com" && url.path.hasPrefix("/webstore"))
+    }
+}
+#endif

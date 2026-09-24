@@ -1,3 +1,4 @@
+#if compiler(>=6.1)
 import AppKit
 import WebKit
 
@@ -311,4 +312,5 @@ final class PopupPage: NSObject, WKWebExtensionTab {
     func isSelected(for context: WKWebExtensionContext) -> Bool { false }
     func close(for context: WKWebExtensionContext) async throws { ExtensionPopup.shared.close() }
 }
+#endif
 

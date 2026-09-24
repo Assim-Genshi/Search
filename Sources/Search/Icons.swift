@@ -21,14 +21,14 @@ final class Favicons {
     private var busy: Set<String> = []
     private var missing: Set<String> = []
 
-    private static var folder: URL { Store.folder.appendingPathComponent("icons", isDirectory: true) }
-    private static func file(_ key: String) -> URL { folder.appendingPathComponent(key + ".png") }
+    private nonisolated static var folder: URL { Store.folder.appendingPathComponent("icons", isDirectory: true) }
+    private nonisolated static func file(_ key: String) -> URL { folder.appendingPathComponent(key + ".png") }
 
     /// Whether the chrome is dark right now. A site that declares an icon
     /// for `prefers-color-scheme: dark` is asked for that one, and it is
     /// kept apart from the light one, so switching looks switches icons.
     static var dark: Bool {
-        NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        NSApplication.shared.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
     }
 
     /// The name an icon is kept under: the host, with a suffix for the dark
@@ -149,13 +149,17 @@ final class Favicons {
         missing.insert(host)
     }
 
+    private struct SendableImage: @unchecked Sendable {
+        let image: NSImage?
+    }
+
     /// Decoded and drawn into a square off the main thread — an .ico can hold
     /// a dozen sizes and take a moment to unpack.
     private static func square(_ data: Data) async -> NSImage? {
-        await Task.detached(priority: .utility) { () -> NSImage? in
+        await Task.detached(priority: .utility) { () -> SendableImage in
             guard let image = NSImage(data: data), image.isValid,
                   image.size.width > 0, image.size.height > 0
-            else { return nil }
+            else { return SendableImage(image: nil) }
             let side: CGFloat = 64
             let out = NSImage(size: NSSize(width: side, height: side))
             out.lockFocus()
@@ -170,8 +174,8 @@ final class Favicons {
                 fraction: 1
             )
             out.unlockFocus()
-            return out
-        }.value
+            return SendableImage(image: out)
+        }.value.image
     }
 
     private static func keep(_ image: NSImage, for key: String) {
@@ -179,6 +183,7 @@ final class Favicons {
               let rep = NSBitmapImageRep(data: tiff),
               let png = rep.representation(using: .png, properties: [:])
         else { return }
+        let folder = Favicons.folder
         let file = Favicons.file(key)
         DispatchQueue.global(qos: .utility).async {
             try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)

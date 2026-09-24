@@ -96,8 +96,12 @@ final class Tab: ObservableObject, Identifiable {
     /// Whether its page was made with the extension controller in it — every
     /// ordinary tab, and a private one only when extensions were allowed
     /// there as it was made (a controller can't be added to a page later).
+    #if compiler(>=6.1)
     @available(macOS 15.4, *)
     var carriesExtensions: Bool { configuration.webExtensionController != nil }
+    #else
+    var carriesExtensions: Bool { false }
+    #endif
     /// Whoever handles navigation and windows for this page; applied when
     /// the page is built, whenever that is.
     weak var delegate: (WKNavigationDelegate & WKUIDelegate)? {

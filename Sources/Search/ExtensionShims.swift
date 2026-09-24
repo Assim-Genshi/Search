@@ -1,3 +1,4 @@
+#if compiler(>=6.1)
 import AppKit
 import WebKit
 import Combine
@@ -2386,8 +2387,18 @@ enum ExtensionShims {
 
         // MARK: system
         case "system.cpu.getInfo":
-            return ["numOfProcessors": ProcessInfo.processInfo.processorCount, "archName": "arm64",
-                    "modelName": "Apple silicon", "features": [], "processors": [], "temperatures": []]
+            #if arch(arm64)
+            let archName = "arm64"
+            let modelName = "Apple silicon"
+            #elseif arch(x86_64)
+            let archName = "x86-64"
+            let modelName = "Intel"
+            #else
+            let archName = "unknown"
+            let modelName = "Unknown"
+            #endif
+            return ["numOfProcessors": ProcessInfo.processInfo.processorCount, "archName": archName,
+                    "modelName": modelName, "features": [], "processors": [], "temperatures": []]
         case "system.memory.getInfo":
             return ["capacity": Double(ProcessInfo.processInfo.physicalMemory), "availableCapacity": Double(ProcessInfo.processInfo.physicalMemory) / 2]
         case "system.storage.getInfo":
@@ -2638,3 +2649,4 @@ enum ExtensionAuth {
         return true
     }
 }
+#endif

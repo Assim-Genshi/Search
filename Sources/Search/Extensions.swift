@@ -37,6 +37,7 @@ struct Installed: Codable, Identifiable, Equatable {
     var source: String? = nil
 }
 
+#if compiler(>=6.1)
 @available(macOS 15.4, *)
 @MainActor
 final class Extensions: NSObject, ObservableObject {
@@ -46,6 +47,10 @@ final class Extensions: NSObject, ObservableObject {
     /// it can't be given one later.
     static func attach(_ configuration: WKWebViewConfiguration) {
         configuration.webExtensionController = shared.controller
+    }
+
+    func configuration(for url: URL) -> WKWebViewConfiguration? {
+        controller.extensionContext(for: url)?.webViewConfiguration
     }
 
     let controller: WKWebExtensionController
@@ -1289,3 +1294,43 @@ private struct ExtensionMenu: View {
         }
     }
 }
+#else
+
+@MainActor
+final class Extensions: NSObject, ObservableObject {
+    static let shared = Extensions()
+    static let scheme = "chrome-extension"
+    static func attach(_ configuration: WKWebViewConfiguration) {}
+    static func current(_ url: URL) -> URL { url }
+
+    weak var browser: Browser?
+    @Published private(set) var installed: [Installed] = []
+    @Published private(set) var busy: String? = nil
+    @Published private(set) var actionsChanged = 0
+    var menuOpen = false
+    var newTabPage: URL? { nil }
+    var passwordSavingTakenBy: String? { nil }
+
+    func start(for browser: Browser) { self.browser = browser }
+    func offerNewTabPage(into tab: Tab) {}
+    func install(from url: String) {}
+    func take(_ event: NSEvent) -> Bool { false }
+    func menuItems(for tab: Tab?) -> [NSMenuItem] { [] }
+    func configuration(for url: URL) -> WKWebViewConfiguration? { nil }
+}
+
+struct ExtensionSlot: View {
+    var edge: Edge = .bottom
+    var body: some View {
+        EmptyView()
+    }
+}
+
+@MainActor
+func extensionMenuPicture() -> NSBitmapImageRep? { nil }
+
+enum ExtensionAuth {
+    static func intercept(_ url: URL, browser: Browser) -> Bool { false }
+}
+
+#endif
