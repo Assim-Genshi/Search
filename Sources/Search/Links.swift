@@ -135,7 +135,8 @@ final class Links: NSObject, NSApplicationDelegate {
 
     /// Runs once a window is actually showing, and one turn of the run loop
     /// after that, so the frame is on the screen before the work starts.
-    /// Gives up waiting after a second or so and runs anyway.
+    /// Gives up waiting after a second or so and runs anyway — a launch
+    /// started hidden has a window nobody can see yet.
     @MainActor
     private static func onceShown(_ then: @escaping @Sendable @MainActor () -> Void, tries: Int = 0) {
         let shown = NSApp.windows.contains { $0.isVisible && $0.contentView != nil }
