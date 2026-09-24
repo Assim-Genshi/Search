@@ -1,3 +1,4 @@
+#if compiler(>=6.1)
 import Foundation
 import WebKit
 
@@ -155,3 +156,4 @@ enum ExtensionSocket {
         }
     }
 }
+#endif

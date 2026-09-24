@@ -1369,7 +1369,7 @@ struct ExtensionSlot: View {
 func extensionMenuPicture() -> NSBitmapImageRep? { nil }
 
 enum ExtensionAuth {
-    static func intercept(_ url: URL, browser: Browser) -> Bool { false }
+    static func intercept(_ url: URL, browser: Browser, from webView: WKWebView) -> Bool { false }
 }
 
 #endif
