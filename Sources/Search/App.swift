@@ -218,11 +218,29 @@ private struct MenuLine: View {
 
 struct ContentView: View {
     @ObservedObject var browser: Browser
+    @Environment(\.colorScheme) private var colorScheme
 
     @State private var keys: Any?
     @State private var window: NSWindow?
     @State private var resting: RestingLights?
 
+    private var cardInsets: EdgeInsets {
+        guard browser.prefs.cardWindow, browser.active?.immersed != true else {
+            return EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0)
+        }
+        let top = browser.prefs.sidebar ? Metrics.cardInset : 0
+        let leading = sidebar ? 0 : Metrics.cardInset
+        return EdgeInsets(
+            top: top,
+            leading: leading,
+            bottom: Metrics.cardInset,
+            trailing: Metrics.cardInset
+        )
+    }
+
+    private var cardRadius: CGFloat {
+        (browser.prefs.cardWindow && browser.active?.immersed != true) ? Metrics.cardRadius : 0
+    }
 
     /// The window: room at the top, one stage for the page, and the row when
     /// there is one.
@@ -230,7 +248,17 @@ struct ContentView: View {
         ZStack(alignment: .top) {
             // Black while a page has the screen, so the frame of our own window
             // that survives the transition is not a white band across the top.
-            (browser.active?.immersed == true ? Color.black : Palette.ground)
+            if browser.active?.immersed == true {
+                Color.black
+            } else if browser.prefs.transparentForeground {
+                VisualEffectView(material: .sidebar, blendingMode: .behindWindow)
+            } else {
+                Palette.canvas
+            }
+
+            if browser.active?.immersed != true {
+                DragStrip()
+            }
 
             HStack(spacing: 0) {
                 // The column of tabs, in the way that has one. It takes the
@@ -248,24 +276,11 @@ struct ContentView: View {
                     // and it costs a compositing pass.
                     Color.clear.frame(height: band)
 
-                    // One stage, always.
+                    // One stage, always, inset in an Arc-style card.
                     if let tab = browser.active {
-                        Page(tab: tab)
-                            .overlay(alignment: .topTrailing) {
-                                if browser.finding {
-                                    FindBar(browser: browser)
-                                        .transition(.move(edge: .top).combined(with: .opacity))
-                                }
-                            }
-                            .overlay(alignment: .topLeading) {
-                                if let asked = browser.suggesting, asked.tab == tab.id {
-                                    AccountList(browser: browser, asked: asked)
-                                        .transition(.opacity)
-                                }
-                            }
-                            .animation(Motion.quick, value: browser.suggesting)
+                        contentCard(for: tab)
                     } else {
-                        Palette.ground
+                        blankCard
                     }
                 }
             }
@@ -277,7 +292,58 @@ struct ContentView: View {
         }
         .ignoresSafeArea()
         .animation(Motion.glide, value: browser.prefs.sidebar)
+        .animation(Motion.glide, value: browser.prefs.cardWindow)
+        .animation(Motion.glide, value: browser.prefs.transparentForeground)
+        .animation(Motion.glide, value: browser.folded)
         .animation(.easeOut(duration: 0.12), value: browser.active?.immersed)
+    }
+
+    private func contentCard(for tab: Tab) -> some View {
+        Page(tab: tab, cardRadius: cardRadius)
+            .overlay(alignment: .topTrailing) {
+                if browser.finding {
+                    FindBar(browser: browser)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
+            .overlay(alignment: .topLeading) {
+                if let asked = browser.suggesting, asked.tab == tab.id {
+                    AccountList(browser: browser, asked: asked)
+                        .transition(.opacity)
+                }
+            }
+            .animation(Motion.quick, value: browser.suggesting)
+            .background(Palette.ground)
+            .clipShape(RoundedRectangle(cornerRadius: cardRadius, style: .continuous))
+            .overlay {
+                if browser.prefs.cardWindow, browser.active?.immersed != true {
+                    RoundedRectangle(cornerRadius: cardRadius, style: .continuous)
+                        .strokeBorder(Palette.hairline, lineWidth: 1)
+                }
+            }
+            .shadow(
+                color: Color.black.opacity((!browser.prefs.cardWindow || browser.active?.immersed == true) ? 0 : (colorScheme == .dark ? 0.35 : 0.05)),
+                radius: 6,
+                y: 1.5
+            )
+            .padding(cardInsets)
+    }
+
+    private var blankCard: some View {
+        Palette.ground
+            .clipShape(RoundedRectangle(cornerRadius: cardRadius, style: .continuous))
+            .overlay {
+                if browser.prefs.cardWindow, browser.active?.immersed != true {
+                    RoundedRectangle(cornerRadius: cardRadius, style: .continuous)
+                        .strokeBorder(Palette.hairline, lineWidth: 1)
+                }
+            }
+            .shadow(
+                color: Color.black.opacity((!browser.prefs.cardWindow || browser.active?.immersed == true) ? 0 : (colorScheme == .dark ? 0.35 : 0.05)),
+                radius: 6,
+                y: 1.5
+            )
+            .padding(cardInsets)
     }
 
     /// Everything that rises from the bottom edge to say one thing.
@@ -371,6 +437,9 @@ struct ContentView: View {
             .background(WindowSetup { window = $0; dress($0) })
             .onChange(of: browser.prefs.sidebar) { _, _ in
                 DispatchQueue.main.async { measureLights() }
+            }
+            .onChange(of: browser.prefs.transparentForeground) { _, _ in
+                if let window { applyTranslucency(to: window) }
             }
             // Stepping away to another app: macOS draws its own resting
             // buttons, and on a light window they come out nearly white. Ours
@@ -576,13 +645,26 @@ struct ContentView: View {
         view.isHidden = NSApp.isActive
     }
 
+    private func applyTranslucency(to window: NSWindow) {
+        if browser.prefs.transparentForeground {
+            window.isOpaque = false
+            window.backgroundColor = .clear
+        } else {
+            window.isOpaque = true
+            window.backgroundColor = Palette.NS.canvas
+        }
+        window.hasShadow = true
+        window.invalidateShadow()
+    }
+
     private func dress(_ window: NSWindow) {
         Links.window = window
+        window.acceptsMouseMovedEvents = true
         // Light or dark is the app's to say (Settings › Appearance); the
         // window only has to be the ground colour that goes with it.
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
-        window.backgroundColor = Palette.NS.ground
+        applyTranslucency(to: window)
         // The strip does the dragging, so the page underneath can't be grabbed
         // by accident while selecting text.
         window.isMovableByWindowBackground = false

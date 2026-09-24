@@ -11,6 +11,7 @@ import WebKit
 /// what turns that into a redraw.
 struct Page: View {
     @ObservedObject var tab: Tab
+    var cardRadius: CGFloat = Metrics.cardRadius
 
     var body: some View {
         ZStack {
@@ -21,7 +22,10 @@ struct Page: View {
             // before and after the float changes nothing SwiftUI can see, so
             // the stage was never told to take it back when it landed, and
             // the tab stayed empty. Nothing, then the page, is a change.
-            WebStage(page: tab.isBlank || tab.asleep || tab.floating ? nil : tab.web)
+            WebStage(
+                page: tab.isBlank || tab.asleep || tab.floating ? nil : tab.web,
+                cornerRadius: tab.immersed ? 0 : cardRadius
+            )
 
             if let cover = tab.cover {
                 // The page as it was left, while it is rebuilt underneath —
@@ -124,10 +128,16 @@ private struct Disc: View {
 /// reload, no lost scroll position, no forgotten form.
 struct WebStage: NSViewRepresentable {
     let page: NSView?
+    var cornerRadius: CGFloat = 0
 
-    func makeNSView(context: Context) -> StageView { StageView() }
+    func makeNSView(context: Context) -> StageView {
+        let view = StageView()
+        view.applyRadius(cornerRadius)
+        return view
+    }
 
     func updateNSView(_ view: StageView, context: Context) {
+        view.applyRadius(cornerRadius)
         view.show(page)
     }
 }
@@ -145,6 +155,18 @@ final class StageView: NSView {
     /// Now there is one fact and one rule: show `wanted`, and put that right on
     /// every layout. Nothing to fall out of step with.
     private weak var wanted: NSView?
+
+    func applyRadius(_ radius: CGFloat) {
+        wantsLayer = true
+        if radius > 0 {
+            layer?.cornerRadius = radius
+            layer?.masksToBounds = true
+            layer?.cornerCurve = .continuous
+        } else {
+            layer?.cornerRadius = 0
+            layer?.masksToBounds = false
+        }
+    }
 
     override func layout() {
         super.layout()

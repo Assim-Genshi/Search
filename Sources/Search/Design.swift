@@ -12,6 +12,7 @@ import AppKit
 // which it is.
 enum Palette {
     static let ground = Color(nsColor: NS.ground)
+    static let canvas = Color(nsColor: NS.canvas)
     static let ink = Color(nsColor: NS.ink)             // neutral-900 · neutral-100
     static let muted = Color(nsColor: NS.muted)         // neutral-500
     static let faint = Color(nsColor: NS.faint)         // neutral-300 · neutral-700
@@ -23,6 +24,7 @@ enum Palette {
     /// ink, a window's background — which want an NSColor and keep it.
     enum NS {
         static let ground = pair(1.0, 0.11)
+        static let canvas = pair(0.945, 0.08)
         static let ink = pair(0.09, 0.93)
         static let muted = pair(0.55, 0.58)
         static let faint = pair(0.83, 0.32)
@@ -125,13 +127,17 @@ enum Metrics {
     static let side: CGFloat = 232
     static let sideMin: CGFloat = 176
     static let sideMax: CGFloat = 440
+    /// The inset around the web content card in Arc style ("box inside another box").
+    static let cardInset: CGFloat = 6
+    /// The corner radius of the web content card.
+    static let cardRadius: CGFloat = 10
 }
 
 // One spring for anything that moves between two places, one for anything that
 // arrives or leaves. Using the same two everywhere is most of why a thing feels
 // like a single piece of software rather than a pile of views.
 enum Motion {
-    static let glide = Animation.spring(response: 0.34, dampingFraction: 0.82)
+    static let glide = Animation.spring(response: 0.32, dampingFraction: 0.94)
     static let settle = Animation.spring(response: 0.30, dampingFraction: 0.86)
     static let quick = Animation.easeOut(duration: 0.14)
 }
@@ -230,5 +236,42 @@ struct Shake: GeometryEffect {
         return ProjectionTransform(
             CGAffineTransform(translationX: sin(travel * .pi * 6) * 7 * decay, y: 0)
         )
+    }
+}
+
+/// Real macOS vibrancy view (Liquid Glass / blur behind window or within window).
+struct VisualEffectView: NSViewRepresentable {
+    var material: NSVisualEffectView.Material = .sidebar
+    var blendingMode: NSVisualEffectView.BlendingMode = .behindWindow
+    var state: NSVisualEffectView.State = .active
+    var cornerRadius: CGFloat = 0
+
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = material
+        view.blendingMode = blendingMode
+        view.state = state
+        if cornerRadius > 0 {
+            view.wantsLayer = true
+            view.layer?.cornerRadius = cornerRadius
+            view.layer?.cornerCurve = .continuous
+            view.layer?.masksToBounds = true
+        }
+        return view
+    }
+
+    func updateNSView(_ view: NSVisualEffectView, context: Context) {
+        view.material = material
+        view.blendingMode = blendingMode
+        view.state = state
+        if cornerRadius > 0 {
+            view.wantsLayer = true
+            view.layer?.cornerRadius = cornerRadius
+            view.layer?.cornerCurve = .continuous
+            view.layer?.masksToBounds = true
+        } else {
+            view.layer?.cornerRadius = 0
+            view.layer?.masksToBounds = false
+        }
     }
 }

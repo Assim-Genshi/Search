@@ -140,6 +140,14 @@ final class Preferences: ObservableObject {
     @Published var usesSpaces: Bool {
         didSet { store.set(usesSpaces, forKey: "spaces") }
     }
+    /// Inset the page like a card with padding and rounded corners like Arc.
+    @Published var cardWindow: Bool {
+        didSet { store.set(cardWindow, forKey: "window.card") }
+    }
+    /// Translucent glass material for the window padding and peeking sidebar.
+    @Published var transparentForeground: Bool {
+        didSet { store.set(transparentForeground, forKey: "window.transparentForeground") }
+    }
 
     init() {
         // Carried over from when there were four ways of holding the browser
@@ -199,6 +207,8 @@ final class Preferences: ObservableObject {
         let scrolls = store.bool(forKey: "autoscroll")
         autoScroll = scrolls
         AutoScroll.on = scrolls
+        cardWindow = store.object(forKey: "window.card") as? Bool ?? true
+        transparentForeground = store.bool(forKey: "window.transparentForeground")
         // Left behind by the Web Inspector's switch, from before it was
         // always there.
         store.removeObject(forKey: "inspector")

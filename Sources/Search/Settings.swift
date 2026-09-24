@@ -15,11 +15,12 @@ struct SettingsPanel: View {
     @State private var page: Page = Page(rawValue: Store.settings.string(forKey: "settings.page") ?? "") ?? .general
 
     enum Page: String, CaseIterable, Identifiable {
-        case general, tabs, extensions, passwords, downloads, privacy, about
+        case general, appearance, tabs, extensions, passwords, downloads, privacy, about
         var id: String { rawValue }
         var title: String {
             switch self {
             case .general: return "General"
+            case .appearance: return "Appearance"
             case .tabs: return "Tabs"
             case .extensions: return "Extensions"
             case .passwords: return "Passwords"
@@ -31,6 +32,7 @@ struct SettingsPanel: View {
         var icon: String {
             switch self {
             case .general: return "macwindow"
+            case .appearance: return "paintbrush"
             case .tabs: return "rectangle.split.3x1"
             case .extensions: return "puzzlepiece.extension"
             case .passwords: return "key"
@@ -132,6 +134,7 @@ struct SettingsPanel: View {
                 VStack(alignment: .leading, spacing: 18) {
                     switch page {
                     case .general: general
+                    case .appearance: appearance
                     case .tabs: tabs
                     case .extensions: ExtensionsPage(browser: browser)
                     case .passwords: passwords
@@ -147,6 +150,30 @@ struct SettingsPanel: View {
         .padding(.top, 18)
         .padding(.bottom, 18)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    // MARK: - appearance
+
+    private var appearance: some View {
+        Card {
+            Line("Theme", "Light, dark, or whatever the Mac is doing — pages follow it too") {
+                Segmented(options: Look.allCases.map { ($0, $0.title) }, selection: $prefs.look)
+            }
+            Rule()
+            Line(
+                "Inset page like Arc",
+                "Surround the page with a clean margin and rounded corners like a box inside the window"
+            ) {
+                Switch(on: $prefs.cardWindow)
+            }
+            Rule()
+            Line(
+                "Transparent foreground",
+                "Use a glass material for the window frame and padding, and blur the page behind the folded sidebar"
+            ) {
+                Switch(on: $prefs.transparentForeground)
+            }
+        }
     }
 
     // MARK: - general
@@ -198,10 +225,6 @@ struct SettingsPanel: View {
                 .background(Palette.wash, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                 .padding(.horizontal, 14)
                 .padding(.bottom, 11)
-            }
-            Rule()
-            Line("Appearance", "Light, dark, or whatever the Mac is doing — pages follow it too") {
-                Segmented(options: Look.allCases.map { ($0, $0.title) }, selection: $prefs.look)
             }
             Rule()
             Line("Correct spelling as you type", "macOS's autocorrect inside pages — the one that capitalises for you") {

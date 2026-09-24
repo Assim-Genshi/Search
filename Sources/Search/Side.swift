@@ -89,10 +89,7 @@ struct SideBar: View {
         // Rows on their way to or from another space stay in the column.
         .clipped()
         .onAppear { SpaceSwipe.shared.start(for: browser) }
-        .background(landing ? Palette.hover : Palette.ground)
-        .overlay(alignment: .trailing) {
-            Rectangle().fill(Palette.hairline).frame(width: 1)
-        }
+        .background(sidebarBackground)
         .overlay(alignment: .trailing) { edge }
         .onDrop(of: [.url, .text], isTargeted: $landing) { providers in
             browser.take(providers)
@@ -102,6 +99,22 @@ struct SideBar: View {
         .animation(Motion.glide, value: browser.editingTab)
         .animation(Motion.settle, value: browser.tabs.map(\.id))
         .animation(Motion.settle, value: browser.pinnedCount)
+    }
+
+    @ViewBuilder
+    private var sidebarBackground: some View {
+        let radius: CGFloat = (browser.folded && prefs.cardWindow) ? Metrics.cardRadius : 0
+        if landing {
+            Palette.hover
+        } else if prefs.transparentForeground {
+            if browser.folded {
+                VisualEffectView(material: .sidebar, blendingMode: .withinWindow, cornerRadius: radius)
+            } else {
+                VisualEffectView(material: .sidebar, blendingMode: .behindWindow, cornerRadius: radius)
+            }
+        } else {
+            Palette.canvas
+        }
     }
 
     /// The column's edge: pull it to make the column wider or narrower,
