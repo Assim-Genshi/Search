@@ -259,7 +259,10 @@ struct Fold: View {
             // Top TabBar when folded
             if folding, !prefs.sidebar {
                 TabBar(browser: browser)
-                    .shadow(color: .black.opacity(0.14), radius: 20, y: 4)
+                    .background {
+                        Palette.ground
+                            .shadow(color: .black.opacity(0.14), radius: 20, y: 4)
+                    }
                     .offset(y: browser.peeking ? 0 : -Metrics.strip - 25)
                     .allowsHitTesting(browser.peeking)
                     .animation(Motion.glide, value: browser.peeking)
@@ -338,7 +341,6 @@ struct Fold: View {
     private var lightsOff: Bool {
         browser.folded && !browser.peeking
     }
-
     /// The title bar's own view holds the three buttons and the resting
     /// circles drawn over them while the app is behind (see RestingLights),
     /// so hiding it hides both, and hidden buttons take no clicks.
@@ -413,5 +415,43 @@ struct Fold: View {
         }
         layer.add(spring, forKey: "fold")
         CATransaction.commit()
+    }
+}
+
+/// The pointer's moves, wherever it goes, while something is folded: over
+/// this app's windows, and over everything else while another app is in
+/// front, since the edge is still the edge with Search behind.
+@MainActor
+private final class Pointer {
+    weak var window: NSWindow?
+    private var local: Any?
+    private var global: Any?
+    /// The window's own say on mouse-moved events, given back when the
+    /// watch ends.
+    private var accepted = false
+
+    func start(_ moved: @escaping @MainActor () -> Void) {
+        guard local == nil, let window else { return }
+        // The pointer's moves reach the monitor wherever it is over the
+        // window, not only over what tracks it — for as long as the watch
+        // lasts, and no longer.
+        accepted = window.acceptsMouseMovedEvents
+        window.acceptsMouseMovedEvents = true
+        local = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { event in
+            MainActor.assumeIsolated { moved() }
+            return event
+        }
+        global = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { _ in
+            MainActor.assumeIsolated { moved() }
+        }
+    }
+
+    func stop() {
+        guard local != nil || global != nil else { return }
+        if let local { NSEvent.removeMonitor(local) }
+        if let global { NSEvent.removeMonitor(global) }
+        local = nil
+        global = nil
+        window?.acceptsMouseMovedEvents = accepted
     }
 }

@@ -11,7 +11,7 @@ import Combine
 // which one is in front, what a new tab or a popup means in this window, who
 // is asked for a permission and how — plus the Chrome Web Store install
 // (Crx.swift) and the APIs WebKit doesn't have, filled in natively
-// (ExtensionShims.swift, ExtensionNative.swift).
+// (ExtensionShims.swift, ExtensionNative.swift, ExtensionSocket.swift).
 //
 // Tab is a Swift class and the protocols are Objective-C ones, so each tab
 // is represented to WebKit by a small adapter kept here. A tab can be in the
@@ -305,7 +305,7 @@ final class Extensions: NSObject, ObservableObject {
                 let target = Extensions.folder(for: id)
                 let staged = Extensions.folder.appendingPathComponent(".staging-\(id)", isDirectory: true)
                 try Crx.unpack(zip, into: staged)
-                try ExtensionShims.prepare(staged)
+                try ExtensionShims.prepare(staged, fresh: true)
                 try await admit(staged, as: id, fromStore: true, finalFolder: target, confirm: confirm || !Store.testing)
             } catch {
                 browser?.announce(error.localizedDescription)
@@ -336,7 +336,7 @@ final class Extensions: NSObject, ObservableObject {
             try FileManager.default.createDirectory(at: Extensions.folder, withIntermediateDirectories: true)
             try? FileManager.default.removeItem(at: staged)
             try FileManager.default.copyItem(at: source, to: staged)
-            try ExtensionShims.prepare(staged)
+            try ExtensionShims.prepare(staged, fresh: true)
         } catch {
             browser?.announce("Couldn't copy the extension")
             return
@@ -361,7 +361,7 @@ final class Extensions: NSObject, ObservableObject {
             do {
                 try? files.removeItem(at: staged)
                 try files.copyItem(at: source, to: staged)
-                try ExtensionShims.prepare(staged)
+                try ExtensionShims.prepare(staged, fresh: true)
                 try? files.removeItem(at: target)
                 try files.moveItem(at: staged, to: target)
             } catch {
@@ -377,7 +377,7 @@ final class Extensions: NSObject, ObservableObject {
                let index = installed.firstIndex(where: { $0.id == id }) {
                 installed[index].name = found.displayName ?? installed[index].name
                 installed[index].version = found.version ?? installed[index].version
-                installed[index].permissions = found.requestedPermissions.map(\.rawValue).sorted()
+                installed[index].permissions = Extensions.grants(found, in: target)
                 save()
             }
             guard let item = installed.first(where: { $0.id == id }), item.enabled else { return }
@@ -463,7 +463,7 @@ final class Extensions: NSObject, ObservableObject {
         try files.moveItem(at: staged, to: finalFolder)
         let item = Installed(
             id: id, name: name, version: found.version ?? "?", enabled: true, fromStore: fromStore,
-            permissions: found.requestedPermissions.map(\.rawValue).sorted(),
+            permissions: Extensions.grants(found, in: finalFolder),
             source: source?.path
         )
         installed.removeAll { $0.id == id }
@@ -587,9 +587,11 @@ final class Extensions: NSObject, ObservableObject {
             let zip = try Crx.verifiedZip(try await Crx.fetch(item.id), id: item.id)
             let staged = Extensions.folder.appendingPathComponent(".staging-\(item.id)", isDirectory: true)
             try Crx.unpack(zip, into: staged)
-            try ExtensionShims.prepare(staged)
+            try ExtensionShims.prepare(staged, fresh: true)
             let found = try await WKWebExtension(resourceBaseURL: staged)
-            let wants = Set(found.requestedPermissions.map(\.rawValue))
+            // Everything it could do, sites included, against what it was
+            // allowed when it was added or last asked about.
+            let wants = Set(Extensions.grants(found, in: staged))
             if !wants.isSubset(of: Set(item.permissions)) {
                 guard await ask(install: "An update to \(item.name)", wants: Extensions.describe(found, in: staged), icon: found.icon(for: CGSize(width: 64, height: 64))) else {
                     try? FileManager.default.removeItem(at: staged)
@@ -622,6 +624,31 @@ final class Extensions: NSObject, ObservableObject {
 
     // MARK: - asking
 
+    /// What an extension was allowed, as it is written down and compared on
+    /// every update: WebKit's permissions, the sites it reaches, and the
+    /// APIs Search answers for it (history, bookmarks…) — an update that
+    /// adds any of them is asked about again.
+    static func grants(_ found: WKWebExtension, in folder: URL) -> [String] {
+        let added = Set((try? JSONSerialization.jsonObject(with: Data(contentsOf: folder.appendingPathComponent(".search-added")))) as? [String] ?? [])
+        let declared = ((try? JSONSerialization.jsonObject(with: Data(contentsOf: folder.appendingPathComponent("manifest.json")))) as? [String: Any])?["permissions"] as? [String] ?? []
+        let ours = Set(Extensions.searchAnswered.map(\.0))
+        var out = Set(found.requestedPermissions.map(\.rawValue).filter { !added.contains($0) })
+        out.formUnion(found.allRequestedMatchPatterns.map { "site:" + $0.string })
+        out.formUnion(declared.filter { ours.contains($0) && !added.contains($0) }.map { "search:" + $0 })
+        return out.sorted()
+    }
+
+    /// Chrome's own APIs, which Search answers itself, and what each lets an
+    /// extension do.
+    static let searchAnswered: [(String, String)] = [
+        ("userScripts", "Run scripts you add to it on websites"), ("history", "Read and change your history"),
+        ("bookmarks", "Read and change your bookmarks"), ("downloads", "Manage your downloads"),
+        ("privacy", "Change your privacy settings"), ("browsingData", "Clear your browsing data"),
+        ("management", "See your other extensions"), ("notifications", "Show notifications"),
+        ("sessions", "See your recently closed tabs"), ("topSites", "See your most visited sites"),
+        ("readingList", "Read and change your reading list"),
+    ]
+
     /// What an extension wants, in words.
     static func describe(_ found: WKWebExtension, in folder: URL) -> [String] {
         var out: [String] = []
@@ -649,13 +676,7 @@ final class Extensions: NSObject, ObservableObject {
             out.append(sentence)
         }
         // Chrome's own, which Search answers itself.
-        let ours: [(String, String)] = [
-            ("userScripts", "Run scripts you add to it on websites"), ("history", "Read and change your history"),
-            ("bookmarks", "Read and change your bookmarks"), ("downloads", "Manage your downloads"),
-            ("privacy", "Change your privacy settings"), ("browsingData", "Clear your browsing data"),
-            ("management", "See your other extensions"), ("notifications", "Show notifications"),
-        ]
-        for (name, sentence) in ours where declared.contains(name) { out.append(sentence) }
+        for (name, sentence) in Extensions.searchAnswered where declared.contains(name) { out.append(sentence) }
         return out
     }
 
@@ -752,7 +773,7 @@ final class Extensions: NSObject, ObservableObject {
     }
 
     func press(_ id: String) {
-        guard let context = contexts[id] else { return }
+        guard let context = contexts[id], !ExtensionPopup.shared.closes(id) else { return }
         if let tab = activeAdapter { context.userGesturePerformed(in: tab) }
         // An extension that asked for its button to open its side panel.
         if ExtensionShims.panelOnClick.contains(id), context.action(for: activeAdapter)?.presentsPopup != true {
@@ -889,6 +910,10 @@ extension Extensions: WKWebExtensionControllerDelegate {
     }
 
     func webExtensionController(_ controller: WKWebExtensionController, connectUsing port: WKWebExtension.MessagePort, for extensionContext: WKWebExtensionContext) async throws {
+        if port.applicationIdentifier == ExtensionSocket.name {
+            ExtensionSocket.connect(port, from: extensionContext.uniqueIdentifier)
+            return
+        }
         try ExtensionNative.connect(port, from: extensionContext.uniqueIdentifier)
     }
 }
@@ -942,7 +967,21 @@ final class ExtensionTab: NSObject, WKWebExtensionTab {
         tab?.magnify(to: CGFloat(zoomFactor))
     }
 
-    func loadURL(_ url: URL, for context: WKWebExtensionContext) async throws { tab?.go(to: url) }
+    func loadURL(_ url: URL, for context: WKWebExtensionContext) async throws {
+        guard let tab else { return }
+        // A website's tab sent to one of an extension's own pages — 1Password
+        // does, once a sign-in in its tab has added the account. The page
+        // can only be served to a view built from that extension's
+        // configuration, so the tab is swapped for one that is, as an
+        // extension's page sent to a website is (see Browser.replace).
+        let url = Extensions.current(url)
+        let here = tab.built?.url ?? tab.address
+        if url.scheme == Extensions.scheme, here?.scheme != Extensions.scheme || here?.host != url.host, let browser {
+            browser.replace(tab, going: url)
+            return
+        }
+        tab.go(to: url)
+    }
     func reload(fromOrigin: Bool, for context: WKWebExtensionContext) async throws { tab?.reload() }
     func goBack(for context: WKWebExtensionContext) async throws { tab?.back() }
     func goForward(for context: WKWebExtensionContext) async throws { tab?.forward() }
