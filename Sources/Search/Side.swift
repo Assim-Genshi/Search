@@ -52,7 +52,7 @@ struct SideBar: View {
                 Color.clear
                     .frame(width: Metrics.helm)
                     .allowsHitTesting(false)
-                DragStrip()
+                DragStrip(trailing: 26 + 10)
             }
             .frame(height: Metrics.strip)
 
@@ -65,6 +65,9 @@ struct SideBar: View {
                     Color.clear.frame(width: Metrics.sideLights)
                     Helm(browser: browser)
                     Spacer(minLength: 0)
+                    Door(icon: "sidebar.left", on: !browser.folded, help: "Toggle Sidebar   ⌘S") {
+                        browser.toggleFold()
+                    }
                 }
                 .frame(height: Metrics.strip)
 
@@ -274,13 +277,17 @@ struct SideBar: View {
     private var pinnedTabs: [Tab] { browser.tabs.filter { $0.pin != nil } }
     private var looseTabs: [Tab] { browser.tabs.filter { $0.pin == nil } }
 
-    /// Three columns is the block's own shape — up to six pins, that's two
-    /// full rows, and one or two is just those same three places with a
-    /// couple of them empty rather than a lonely row of its own width. Only
-    /// past six does the block widen, one column at a time, to stay at two
-    /// rows for as long as that's a reasonable shape at all.
+    /// Pinned tabs automatically adapt their column count to fill the width:
+    /// 1 column for 1 pin, 2 columns for 2 pins, 3 columns for 3 pins, etc.
     private static func pinColumns(_ count: Int) -> Int {
-        max(3, (count + 1) / 2)
+        guard count > 0 else { return 1 }
+        switch count {
+        case 1: return 1
+        case 2: return 2
+        case 3: return 3
+        case 4: return 2 // 2x2 grid
+        default: return max(3, (count + 1) / 2)
+        }
     }
 
     /// However many columns the count calls for, they split the row's own

@@ -144,6 +144,9 @@ struct TabBar: View {
                     HStack(spacing: Metrics.tabGap) {
                         ExtensionSlot()
                         Helm(browser: browser)
+                        Door(icon: "sidebar.left", on: !browser.folded, help: "Toggle Sidebar   ⌘S") {
+                            browser.toggleFold()
+                        }
                             .padding(.trailing, 8)
                         Door(icon: "bookmark", help: "Bookmarks") { browser.bookmarksOpen.toggle() }
                             .popover(isPresented: $browser.bookmarksOpen, arrowEdge: .bottom) {
